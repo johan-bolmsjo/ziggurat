@@ -8,9 +8,6 @@ const Allocator = std.mem.Allocator;
 /// referece to it with O(1) time complexity. One element is selected to act as the head of the
 /// list. Iteration is performed by following next or previous links from the head node until they
 /// point to the head node.
-//
-/// Elements are typically embedded in other structs that need to be queued in some fashion. This
-/// way no memory need to be explicitly allocated for the element itself.
 pub fn Elem(comptime T: type) type {
     return struct {
         next_: *@This(),
