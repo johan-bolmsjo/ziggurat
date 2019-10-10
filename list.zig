@@ -8,24 +8,24 @@ const Allocator = std.mem.Allocator;
 /// referece to it with O(1) time complexity. One element is selected to act as the head of the
 /// list. Iteration is performed by following next or previous links from the head node until they
 /// point to the head node.
-pub fn Elem(comptime T: type) type {
+pub fn Elem(comptime D: type) type {
     return struct {
         next_: *@This(),
         prev_: *@This(),
-        value: T,
+        datum:  D,
 
-        /// Initialize element with the specified value and next and prev links pointing to itself
+        /// Initialize element with the specified datum and next and prev links pointing to itself
         /// thereby forming a single element list.
-        pub fn init(self: *@This(), value: T) void {
+        pub fn init(self: *@This(), datum: D) void {
             self.next_ = self;
             self.prev_ = self;
-            self.value = value;
+            self.datum = datum;
         }
 
         /// Allocate element using the supplied allocator and initialize it the same way init does.
-        pub fn new(allocator: *Allocator, value: T) !*@This() {
+        pub fn new(allocator: *Allocator, datum: D) !*@This() {
             var elem = try allocator.create(@This());
-            init(elem, value);
+            init(elem, datum);
             return elem;
         }
 
@@ -95,11 +95,11 @@ fn checkTestLinks(firstElem: *TestElem, expectedLinks: []const TestLink) void {
     for (expectedLinks) |v, i| {
         if (e.next() != v.next) {
             std.debug.panic("expected next node of {} (index {}) to be {}; got {}",
-                            e.value, i, v.next.value, e.next().value);
+                            e.datum, i, v.next.datum, e.next().datum);
         }
         if (e.prev() != v.prev) {
             std.debug.panic("expected previous node of {} (index {}) to be {}; got {}",
-                            e.value, i, v.prev.value, e.prev().value);            
+                            e.datum, i, v.prev.datum, e.prev().datum);
         }
         e = e.next();
      }
@@ -220,7 +220,7 @@ test "iterate" {
     var sum = i32(0);
     var it = h.next();
     while (it != h) : (it = it.next()) {
-        sum += it.value;
+        sum += it.datum;
     }
 
     expect(sum == 1 + 2 + 3 + 4);
