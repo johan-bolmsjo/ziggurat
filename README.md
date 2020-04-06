@@ -11,5 +11,5 @@ Compiles with: zig 0.5.0+dc44fe053
 
 ## Test
 
-zig test list.zig
-zig --release-safe test avl_tree.zig
+    zig test list.zig
+    zig --release-safe test avl_tree.zig
