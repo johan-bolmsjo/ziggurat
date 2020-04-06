@@ -2,35 +2,42 @@ const std = @import("std");
 
 const Allocator = std.mem.Allocator;
 
-/// An element in a circular double linked list.
+/// A node in a circular double linked list.
 //
-/// The most useful property is that an element can remove itself from a list without having a
-/// referece to it with O(1) time complexity. One element is selected to act as the head of the
-/// list. Iteration is performed by following next or previous links from the head node until they
-/// point to the head node.
-pub fn Elem(comptime D: type) type {
+/// The most useful property is that a node can remove itself from a list without having a referece
+/// to it with O(1) time complexity. One node is selected to act as the head of the list. Iteration
+/// is performed by following next or previous links from the head node until they point to the head
+/// node.
+///
+/// Note that D can be set to void if you prefer to store nodes in another struct as opposed to
+/// nodes carrying data. In that case use @fieldParentPtr to perform necessary pointer
+/// manipulations.
+///
+pub fn NodeType(comptime D: type) type {
     return struct {
-        next_: *@This(),
-        prev_: *@This(),
+        const Self = @This();
+        
+        next_: *Self,
+        prev_: *Self,
         datum:  D,
 
-        /// Initialize element with the specified datum and next and prev links pointing to itself
+        /// Initialize node with the specified datum and next and prev links pointing to itself
         /// thereby forming a single element list.
-        pub fn init(self: *@This(), datum: D) void {
+        pub fn init(self: *Self, datum: D) void {
             self.next_ = self;
             self.prev_ = self;
             self.datum = datum;
         }
 
-        /// Allocate element using the supplied allocator and initialize it the same way init does.
-        pub fn new(allocator: *Allocator, datum: D) !*@This() {
-            var elem = try allocator.create(@This());
-            init(elem, datum);
-            return elem;
+        /// Allocate node using the supplied allocator and initialize it the same way init does.
+        pub fn new(allocator: *Allocator, datum: D) !*Self {
+            var node = try allocator.create(Self);
+            init(node, datum);
+            return node;
         }
 
-        /// Link other element next to self.
-        pub fn linkNext(self: *@This(), other: *@This()) void {
+        /// Link other node next to self.
+        pub fn linkNext(self: *Self, other: *Self) void {
             const tmp = other.prev_;
             self.next_.prev_ = tmp;
             tmp.next_ = self.next_;
@@ -38,8 +45,8 @@ pub fn Elem(comptime D: type) type {
             self.next_ = other;
         }
 
-        /// Link other element previous to self.
-        pub fn linkPrev(self: *@This(), other: *@This()) void {
+        /// Link other node previous to self.
+        pub fn linkPrev(self: *Self, other: *Self) void {
             const tmp = other.prev_;
             self.prev_.next_ = other;
             tmp.next_ = self;
@@ -47,150 +54,120 @@ pub fn Elem(comptime D: type) type {
             self.prev_ = tmp;
         }
 
-        /// Unlink element from any list that it's part of.
-        /// This function is safe to call on linked and unlinked elements provided that the element
-        /// has at one time been initialized properly.
-        pub fn unlink(self: *@This()) void {
+        /// Unlink node from any list that it's part of.
+        /// This function is safe to call on linked and unlinked nodes provided that they has at one
+        /// time been initialized properly.
+        pub fn unlink(self: *Self) void {
             self.next_.prev_ = self.prev_;
             self.prev_.next_ = self.next_;
             self.next_ = self;
             self.prev_ = self;
         }
 
-        /// Follow the next link of element.
-        pub inline fn next(self: *@This()) *@This() {
+        /// Follow the next link of node.
+        pub inline fn next(self: *Self) *Self {
             return self.next_;
         }
 
-        /// Follow the previous link of element.
-        pub inline fn prev(self: *@This()) *@This() {
+        /// Follow the previous link of node.
+        pub inline fn prev(self: *Self) *Self {
             return self.prev_;
         }
 
-        /// Check if element is linked to another element than itself.
-        /// This can be applied to the sentinel list head element to check if the list is empty.
-        pub inline fn isLinked(self: *@This()) bool {
+        /// Check if node is linked to another node than itself.
+        /// This can be applied to the sentinel list head node to check if the list is empty.
+        pub inline fn isLinked(self: *Self) bool {
             return self.next_ != self;
         }
     };
 }
 
-const expect = std.testing.expect;
-
-const TestElem = Elem(i32);
-
-const TestLink = struct {
-    next: *TestElem,
-    prev: *TestElem,
-};
-
-fn initTestElems(elems: []TestElem) void {
-    for (elems) |*elem, i| {
-        elem.init(@intCast(i32, i));
-    }
-}
-
-fn checkTestLinks(firstElem: *TestElem, expectedLinks: []const TestLink) void {
-    var e = firstElem;
-    for (expectedLinks) |v, i| {
-        if (e.next() != v.next) {
-            std.debug.panic("expected next node of {} (index {}) to be {}; got {}",
-                            e.datum, i, v.next.datum, e.next().datum);
-        }
-        if (e.prev() != v.prev) {
-            std.debug.panic("expected previous node of {} (index {}) to be {}; got {}",
-                            e.datum, i, v.prev.datum, e.prev().datum);
-        }
-        e = e.next();
-     }
-}
-
 test "linkNext" {
-    var e: [5]TestElem = undefined;
-    initTestElems(e[0..]);
+    var n: [5]Test.Node = undefined;
+    Test.initNodes(n[0..]);
 
-    // Link elements form a list
-    const h1 = &e[0];
-    h1.linkNext(&e[1]);
-    h1.linkNext(&e[2]);
+    // Link nodes form a list
+    const h1 = &n[0];
+    h1.linkNext(&n[1]);
+    h1.linkNext(&n[2]);
 
-    // Link two multi element lists together
-    const h2 = &e[3];
-    h2.linkNext(&e[4]);
+    // Link two multi node lists together
+    const h2 = &n[3];
+    h2.linkNext(&n[4]);
     h1.linkNext(h2);
 
-    // Expected element order [0, 3, 4, 2, 1]
-    const expectedLinks = [_]TestLink{
-        TestLink{.next = &e[3], .prev = &e[1]},
-        TestLink{.next = &e[4], .prev = &e[0]},
-        TestLink{.next = &e[2], .prev = &e[3]},
-        TestLink{.next = &e[1], .prev = &e[4]},
-        TestLink{.next = &e[0], .prev = &e[2]},
+    // Expected node order [0, 3, 4, 2, 1]
+    const expectedLinks = [_]Test.VNode{
+        Test.VNode{.next = &n[3], .prev = &n[1]},
+        Test.VNode{.next = &n[4], .prev = &n[0]},
+        Test.VNode{.next = &n[2], .prev = &n[3]},
+        Test.VNode{.next = &n[1], .prev = &n[4]},
+        Test.VNode{.next = &n[0], .prev = &n[2]},
     };
     
-    checkTestLinks(h1, expectedLinks[0..]);
+    Test.checkLinks(h1, expectedLinks[0..]);
 }
 
 test "linkPrev" {
-    var e: [5]TestElem = undefined;
-    initTestElems(e[0..]);
+    var n: [5]Test.Node = undefined;
+    Test.initNodes(n[0..]);
 
-    // Link elements form a list
-    const h1 = &e[0];
-    h1.linkPrev(&e[1]);
-    h1.linkPrev(&e[2]);
+    // Link nodes form a list
+    const h1 = &n[0];
+    h1.linkPrev(&n[1]);
+    h1.linkPrev(&n[2]);
 
-    // Link two multi element lists together
-    const h2 = &e[3];
-    h2.linkPrev(&e[4]);
+    // Link two multi node lists together
+    const h2 = &n[3];
+    h2.linkPrev(&n[4]);
     h1.linkPrev(h2);
 
-    // Expected element order [0, 1, 2, 3, 4]
-    const expectedLinks = [_]TestLink{
-        TestLink{.next = &e[1], .prev = &e[4]},
-        TestLink{.next = &e[2], .prev = &e[0]},
-        TestLink{.next = &e[3], .prev = &e[1]},
-        TestLink{.next = &e[4], .prev = &e[2]},
-        TestLink{.next = &e[0], .prev = &e[3]},
+    // Expected node order [0, 1, 2, 3, 4]
+    const expectedLinks = [_]Test.VNode{
+        Test.VNode{.next = &n[1], .prev = &n[4]},
+        Test.VNode{.next = &n[2], .prev = &n[0]},
+        Test.VNode{.next = &n[3], .prev = &n[1]},
+        Test.VNode{.next = &n[4], .prev = &n[2]},
+        Test.VNode{.next = &n[0], .prev = &n[3]},
     };
     
-    checkTestLinks(h1, expectedLinks[0..]);
+    Test.checkLinks(h1, expectedLinks[0..]);
 }
 
 test "unlink" {
-    var e: [3]TestElem = undefined;
-    initTestElems(e[0..]);
+    var n: [3]Test.Node = undefined;
+    Test.initNodes(n[0..]);
 
-    const h1 = &e[0];
+    const h1 = &n[0];
 
-    h1.linkPrev(&e[1]);
-    h1.linkPrev(&e[2]);
+    h1.linkPrev(&n[1]);
+    h1.linkPrev(&n[2]);
 
-    // Expected element order [0, 2]
-    e[1].unlink();
-    const expectedLinks = [_]TestLink{
-        TestLink{.next = &e[2], .prev = &e[2]},
-        TestLink{.next = &e[0], .prev = &e[0]},
+    // Expected node order [0, 2]
+    n[1].unlink();
+    const expectedLinks = [_]Test.VNode{
+        Test.VNode{.next = &n[2], .prev = &n[2]},
+        Test.VNode{.next = &n[0], .prev = &n[0]},
     };
-    checkTestLinks(h1, expectedLinks[0..]);
+    Test.checkLinks(h1, expectedLinks[0..]);
 
-    // Test that the unlinked element point to itself
-    const expectedLinks2 = [_]TestLink{
-        TestLink{.next = &e[1], .prev = &e[1]},
+    // Test that the unlinked node point to itself
+    const expectedLinks2 = [_]Test.VNode{
+        Test.VNode{.next = &n[1], .prev = &n[1]},
     };
-    checkTestLinks(&e[1], expectedLinks2[0..]);
+    Test.checkLinks(&n[1], expectedLinks2[0..]);
 
-    // Remove last element
-    // Expected element order [0]
+    // Remove last node
+    // Expected node order [0]
     //
-    // Do it twice to make sure that unlinking an unlinked element has no effect.
-    const expectedLinks3 = [_]TestLink{
-        TestLink{.next = &e[0], .prev = &e[0]},
+    // Do it twice to make sure that unlinking an unlinked node has no effect.
+    const expectedLinks3 = [_]Test.VNode{
+        Test.VNode{.next = &n[0], .prev = &n[0]},
     };
-    var i = usize(0);
+    var i: usize = 0;
     while (i < 2) : (i += 1) {
-        e[2].unlink();
-        checkTestLinks(h1, expectedLinks3[0..]);
+        n[2].unlink();
+        Test.checkLinks(h1, expectedLinks3[0..]);
     }
 }
 
@@ -198,30 +175,62 @@ test "isLinked" {
     var buffer: [100]u8 = undefined;
     const allocator = &std.heap.FixedBufferAllocator.init(&buffer).allocator;
 
-    const e0 = try TestElem.new(allocator, 0);
-    const e1 = try TestElem.new(allocator, 1);
+    const n0 = try Test.Node.new(allocator, 0);
+    const n1 = try Test.Node.new(allocator, 1);
 
-    expect(!e0.isLinked());
+    Test.expectEqual(false, n0.isLinked());
     
-    e0.linkPrev(e1);
-    expect(e0.isLinked());
-    expect(e1.isLinked());
+    n0.linkPrev(n1);
+    Test.expectEqual(true, n0.isLinked());
+    Test.expectEqual(true, n1.isLinked());
 }
 
 test "iterate" {
-    var e: [5]TestElem = undefined;
-    initTestElems(e[0..]);
+    var n: [5]Test.Node = undefined;
+    Test.initNodes(n[0..]);
 
-    const h = &e[0];
-    for (e[1..]) |*t| {
+    const h = &n[0];
+    for (n[1..]) |*t| {
         h.linkPrev(t);
     }
 
-    var sum = i32(0);
+    var sum: u32 = 0;
     var it = h.next();
     while (it != h) : (it = it.next()) {
         sum += it.datum;
     }
 
-    expect(sum == 1 + 2 + 3 + 4);
+    Test.expectEqual(@as(u32, 1+2+3+4), sum);
 }
+
+const Test = struct {
+    const expectEqual = std.testing.expectEqual;
+    
+    const Node = NodeType(u32);
+
+    const VNode = struct {
+        next: *Test.Node,
+        prev: *Test.Node,
+    };
+
+    fn initNodes(nodes: []Test.Node) void {
+        for (nodes) |*node, i| {
+            node.init(@intCast(u32, i));
+        }
+    }
+
+    fn checkLinks(firstNode: *Node, expectedLinks: []const VNode) void {
+        var n = firstNode;
+        for (expectedLinks) |v, i| {
+            if (n.next() != v.next) {
+                std.debug.panic("expected next node of {} (index {}) to be {}; got {}",
+                                .{n.datum, i, v.next.datum, n.next().datum});
+            }
+            if (n.prev() != v.prev) {
+                std.debug.panic("expected previous node of {} (index {}) to be {}; got {}",
+                                .{n.datum, i, v.prev.datum, n.prev().datum});
+            }
+            n = n.next();
+        }
+    }
+};
