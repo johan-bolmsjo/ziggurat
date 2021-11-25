@@ -1,5 +1,5 @@
-// Based on code originally written by:
-// Julienne Walker, http://eternallyconfuzzled.com
+// Based on code originally written by Julienne Walker in the public domain,
+// https://web.archive.org/web/20070212102708/http://eternallyconfuzzled.com/tuts/datastructures/jsw_tut_avl.aspx
 
 const std = @import("std");
 const mem = std.mem;
@@ -49,7 +49,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
     return struct {
         const Self = @This();
         const Node = NodeType(D);
-        
+
         root: ?*Node = null,
         len: usize = 0,
 
@@ -83,7 +83,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
                 if (order == .eq) {
                     return p;
                 }
-                
+
                 dir = directionOfBool(order == .lt);
                 if (p.links[dir]) |q| {
                     if (q.balance != 0) {
@@ -112,7 +112,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
                 dir = directionOfBool(cmpKey(getKey(s), key) == .lt);
                 s = s.insertBalance(dir);
             }
-            
+
             // Fix parent
             if (q == head.links[Right]) {
                 self.root = s;
@@ -123,7 +123,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
             self.len += 1;
             return node;
         }
-        
+
         /// Remove node associated with key from tree.
         pub fn remove(self: *Self, key: K) ?*Node {
             var curr = self.root orelse return null;
@@ -151,7 +151,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
             // Remove the node
             const leftNode  = curr.links[Left];
             const rightNode = curr.links[Right];
-            
+
             if (leftNode == null or rightNode == null) {
                 // Which child is non-nil?
                 const dir = directionOfBool(leftNode == null);
@@ -179,7 +179,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
                 up[top] = curr;
                 const currPos = top;
                 top += 1;
-                
+
                 while (heir.links[Left]) |heirLeftNode| {
                     upd[top] = Left;
                     up[top] = heir;
@@ -204,7 +204,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
             var done = false;
             while (top > 0 and !done) : (top -= 1) {
                 const i = top - 1;
-                
+
                 // Update balance factors
                 up[i].balance += inverseBalanceOfDirection(upd[i]);
 
@@ -232,7 +232,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
         /// Remove all nodes from the tree.
         /// The release function with supplied context is called on each removed node.
         /// Use {} as context if no release function is supplied.
-        pub fn clear(self: *Self, context: var, releaseFn: ?fn(@TypeOf(context), *Node) void) void {
+        pub fn clear(self: *Self, context: anytype, releaseFn: ?fn(@TypeOf(context), *Node) anyerror!void) anyerror!void {
             var curr = self.root;
 
             // Destruction by rotation
@@ -247,7 +247,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
                         // Remove node
                         const right = xcurr.links[Right];
                         if (releaseFn) |f| {
-                            f(context, xcurr);
+                            try f(context, xcurr);
                         }
                         break :blk right;
                     }
@@ -257,7 +257,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
             self.root = null;
             self.len = 0;
         }
-        
+
         /// Find node associated with key.
         pub fn find(self: *Self, key: K) ?*Node {
             var curr = self.root;
@@ -310,7 +310,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
 
             return if (curr != null) curr else greater;
         }
-        
+
         /// Returns the leftmost node in the tree.
         pub fn leftmost(self: *Self) ?*Node {
             return self.edgeNode(Left);
@@ -334,29 +334,30 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
         }
 
         /// Apply calls the given function on all data stored in the tree left to right.
-        pub fn apply(self: *Self, context: var, applyFn: fn(@TypeOf(context), *Node) void) void {
+        /// Stops iterations if applyFn returns an error and reports it.
+        pub fn apply(self: *Self, context: anytype, applyFn: fn(@TypeOf(context), *Node) anyerror!void) anyerror!void {
             if (self.root) |root| {
-                applyNode(root, context, applyFn);
+                try applyNode(root, context, applyFn);
             }
         }
 
-        fn applyNode(node: *Node, context: var, applyFn: fn(@TypeOf(context), *Node) void) void {
-            if (node.links[Left]) | left | {
-                applyNode(left, context, applyFn);
+        fn applyNode(node: *Node, context: anytype, applyFn: fn(@TypeOf(context), *Node) anyerror!void) anyerror!void {
+            if (node.links[Left]) |left| {
+                try applyNode(left, context, applyFn);
             }
-            applyFn(context, node);
-            if (node.links[Right]) | right | {
-                applyNode(right, context, applyFn);
+            try applyFn(context, node);
+            if (node.links[Right]) |right| {
+                try applyNode(right, context, applyFn);
             }
         }
-        
+
         /// Validate tree invariants.
         /// A valid tree should always be balanced and sorted.
         pub fn validate(self: *Self) ValidationResult {
             var result = ValidationResult{};
 
             if (self.root) |node| {
-                _ = self.validateNode(node, &result.balanced, &result.sorted, 0); 
+                _ = self.validateNode(node, &result.balanced, &result.sorted, 0);
             }
             return result;
         }
@@ -381,11 +382,11 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
 
             const depthLeft  = depthLink[Left];
             const depthRight = depthLink[Right];
-            
+
             if (abs(depthLeft - depthRight) > 1) {
                 balanced.* = false;
             }
-            
+
             return max(depthLeft, depthRight);
         }
     };
@@ -398,7 +399,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
 pub fn NodeType(comptime D: type) type {
     return struct {
         const Self = @This();
-        
+
         links:   [DirectionCount]?*Self = [DirectionCount]?*Self{null, null},
         balance: i32 = 0,
         datum:   D,
@@ -413,7 +414,7 @@ pub fn NodeType(comptime D: type) type {
             self.links   = other.links;
             self.balance = other.balance;
         }
-        
+
         // Two way single rotation.
         fn single(self: *Self, dir: Direction) *Self {
             const odir = otherDirection(dir);
@@ -535,17 +536,17 @@ inline fn directionOfBool(b: bool) Direction {
 const max = std.math.max;
 
 // We can do without the error checks of std.math.absInt
-inline fn abs(x: var) @TypeOf(x) {
+inline fn abs(x: anytype) @TypeOf(x) {
     return if (x < 0) -x else x;
 }
 
-const runExpensiveTests = true;
+const runCpuIntensiveTests = true;
 
 test "invariants: permute insert" {
-    if (!runExpensiveTests) return;
+    if (!runCpuIntensiveTests) return;
 
     const N = 10;
-    
+
     var tree = Test.Tree{};
     const src = Test.valuesInSequence(N);
     var dst: [N]Test.Value = undefined;
@@ -569,13 +570,13 @@ test "invariants: permute insert" {
             }
         }
 
-        tree.clear({}, null);
+        try tree.clear({}, null);
         seq += 1;
     }
 }
 
 test "invariants: permute remove" {
-    if (!runExpensiveTests) return;
+    if (!runCpuIntensiveTests) return;
 
     const N = 10;
 
@@ -607,7 +608,7 @@ test "invariants: permute remove" {
                 std.debug.panic("Failed to remove datum={}, index={}, removeSequence={}, returnedNode={}",
                                 .{value, i, seq, rnode});
             }
-            
+
             const validation = tree.validate();
             if (!validation.balanced or !validation.sorted) {
                 std.debug.panic("Invalid tree invariant: balanced={}, sorted={}, insertSequence={}",
@@ -615,7 +616,7 @@ test "invariants: permute remove" {
             }
         }
 
-        tree.clear({}, null);
+        try tree.clear({}, null);
         seq += 1;
     }
 }
@@ -626,8 +627,8 @@ test "insert existing" {
     var a = Test.Tree.Node{.datum = 1};
     var b = Test.Tree.Node{.datum = 1};
 
-    Test.expectEqual(&a, tree.insert(&a));
-    Test.expectEqual(&a, tree.insert(&b));
+    try Test.expectEqual(&a, tree.insert(&a));
+    try Test.expectEqual(&a, tree.insert(&b));
 }
 
 // TODO: test "iter update"
@@ -637,7 +638,7 @@ test "insert existing" {
 test "remove from empty tree" {
     var tree = Test.Tree{};
     var node = tree.remove(1);
-    Test.expectEqual(@as(?*Test.Tree.Node, null), node);
+    try Test.expectEqual(@as(?*Test.Tree.Node, null), node);
 }
 
 test "remove non existing" {
@@ -649,34 +650,34 @@ test "remove non existing" {
     Test.populateTree(&tree, &nodes);
 
     var node = tree.remove(4);
-    Test.expectEqual(@as(?*Test.Tree.Node, null), node);
+    try Test.expectEqual(@as(?*Test.Tree.Node, null), node);
 }
 
 test "clear" {
-    const testValues = [_]Test.Value{1, 2, 3, 4, 5, 6, 7, 8, 9};  
+    const testValues = [_]Test.Value{1, 2, 3, 4, 5, 6, 7, 8, 9};
     var nodes: [testValues.len]Test.Tree.Node = undefined;
     Test.initNodes(&nodes, &testValues);
 
     var tree = Test.Tree{};
     Test.populateTree(&tree, &nodes);
-    
+
     // TODO: test iterator invalidation (if iterators are added).
 
     const ReleaseContext = struct {
         testValues: []const Test.Value,
         index: usize = 0,
-            
-        fn f(self: *@This(), node: *Test.Tree.Node) void {
-            Test.expectEqual(self.testValues[self.index], node.datum);
+
+        fn f(self: *@This(), node: *Test.Tree.Node) !void {
+            try Test.expectEqual(self.testValues[self.index], node.datum);
             self.index += 1;
         }
     };
 
     var ctx = ReleaseContext{.testValues = &testValues};
-    tree.clear(&ctx, ReleaseContext.f);
-   
-    Test.expectEqual(@as(?*Test.Tree.Node, null), tree.root);
-    Test.expectEqual(@as(usize, 0), tree.len);
+    try tree.clear(&ctx, ReleaseContext.f);
+
+    try Test.expectEqual(@as(?*Test.Tree.Node, null), tree.root);
+    try Test.expectEqual(@as(usize, 0), tree.len);
 
     // TODO: test iterator invalidation (if iterators are added).
 }
@@ -684,54 +685,54 @@ test "clear" {
 test "clearEmpty" {
     var tree = Test.Tree{};
     const ReleaseContext = struct {
-        fn f(self: void, node: *Test.Tree.Node) void {
-            std.debug.panic("Unexpected callback", .{});
+        fn f(self: void, node: *Test.Tree.Node) !void {
+            return error.TestUnexpectedCallback;
         }
     };
-    tree.clear({}, ReleaseContext.f);
+    try tree.clear({}, ReleaseContext.f);
 }
 
 test "apply" {
-    const testValues = [_]Test.Value{1, 2, 3, 4, 5, 6, 7, 8, 9};  
+    const testValues = [_]Test.Value{1, 2, 3, 4, 5, 6, 7, 8, 9};
     var nodes: [testValues.len]Test.Tree.Node = undefined;
     Test.initNodes(&nodes, &testValues);
 
     var tree = Test.Tree{};
     Test.populateTree(&tree, &nodes);
-    
+
     const ApplyContext = struct {
         testValues: []const Test.Value,
         index: usize = 0,
-            
-        fn f(self: *@This(), node: *Test.Tree.Node) void {
-            Test.expectEqual(self.testValues[self.index], node.datum);
+
+        fn f(self: *@This(), node: *Test.Tree.Node) !void {
+            try Test.expectEqual(self.testValues[self.index], node.datum);
             self.index += 1;
         }
     };
 
     var ctx = ApplyContext{.testValues = &testValues};
-    tree.apply(&ctx, ApplyContext.f);
+    try tree.apply(&ctx, ApplyContext.f);
 }
 
 test "applyEmpty" {
     var tree = Test.Tree{};
     const ApplyContext = struct {
-        fn f(self: void, node: *Test.Tree.Node) void {
-            std.debug.panic("Unexpected callback", .{});
+        fn f(self: void, node: *Test.Tree.Node) !void {
+            return error.TestUnexpectedCallback;
         }
     };
-    tree.apply({}, ApplyContext.f);
+    try tree.apply({}, ApplyContext.f);
 }
 
 test "len" {
     const testValues = [_]Test.Value{1, 2, 3};
     const nonExistingValue: Test.Value = 4;
-    
+
     var nodes: [testValues.len]Test.Tree.Node = undefined;
     Test.initNodes(&nodes, &testValues);
 
     var tree = Test.Tree{};
-    Test.expectEqual(@as(usize, 0), tree.len);
+    try Test.expectEqual(@as(usize, 0), tree.len);
 
     var insertCount: usize = 0;
     for (nodes) |*node| {
@@ -742,18 +743,18 @@ test "len" {
         }
 
         insertCount += 1;
-        Test.expectEqual(insertCount, tree.len);
+        try Test.expectEqual(insertCount, tree.len);
     }
 
     // Removing non existing value should not modify tree count.
     _ = tree.remove(nonExistingValue);
-    Test.expectEqual(insertCount, tree.len);
-    
+    try Test.expectEqual(insertCount, tree.len);
+
     var removeCount: usize = 0;
     for (testValues) |v| {
         _ = tree.remove(v);
         removeCount += 1;
-        Test.expectEqual(insertCount - removeCount, tree.len);
+        try Test.expectEqual(insertCount - removeCount, tree.len);
     }
 }
 
@@ -810,11 +811,9 @@ test "find" {
 
     for (testData) |*t| {
         const output = t.lookupFn(&tree, t.input);
-
-        // TODO: this check can be simplified once https://github.com/ziglang/zig/issues/1332 has been implemented.
-        const nonExistMarker = 99;
-        if ((output orelse nonExistMarker) != (t.output orelse nonExistMarker)) {
-            std.debug.panic("{}: input={}, output={}; expect={}", .{t.name, t.input, output, t.output});
+        const noneMarker = 99;
+        if ((output orelse noneMarker) != (t.output orelse noneMarker)) {
+            std.debug.panic("{s}: input={}, output={}; expect={}", .{t.name, t.input, output, t.output});
         }
     }
 }
@@ -822,38 +821,38 @@ test "find" {
 test "leftmost" {
     var tree = Test.Tree{};
     const expected: ?*Test.Tree.Node = null;
-    Test.expectEqual(expected, tree.leftmost());
+    try Test.expectEqual(expected, tree.leftmost());
 
     const testValues = [_]Test.Value{42, 3, 99, 76};
     var nodes: [testValues.len]Test.Tree.Node = undefined;
     Test.initNodes(&nodes, &testValues);
     Test.populateTree(&tree, &nodes);
 
-    Test.expectEqual(@as(Test.Value, 3), tree.leftmost().?.datum);
+    try Test.expectEqual(@as(Test.Value, 3), tree.leftmost().?.datum);
 }
 
 test "rightmost" {
     var tree = Test.Tree{};
     const expected: ?*Test.Tree.Node = null;
-    Test.expectEqual(expected, tree.rightmost());
+    try Test.expectEqual(expected, tree.rightmost());
 
     const testValues = [_]Test.Value{42, 3, 99, 76};
     var nodes: [testValues.len]Test.Tree.Node = undefined;
     Test.initNodes(&nodes, &testValues);
     Test.populateTree(&tree, &nodes);
 
-    Test.expectEqual(@as(Test.Value, 99), tree.rightmost().?.datum);
+    try Test.expectEqual(@as(Test.Value, 99), tree.rightmost().?.datum);
 }
 
 const Test = struct {
     const expectEqual = std.testing.expectEqual;
-    
+
     const Tree = TreeType(u32, u32, getKey, cmpKey);
 
     fn getKey(node: *NodeType(u32)) u32 {
         return node.datum;
     }
-    
+
     fn cmpKey(lhs: u32, rhs: u32) math.Order {
         if (lhs < rhs) {
             return .lt;
@@ -889,7 +888,7 @@ const Test = struct {
             }
         }
     }
-    
+
     fn factorial(n: u32) u32 {
         var r: u32 = 1;
         var i: u32 = 2;
@@ -898,11 +897,11 @@ const Test = struct {
         }
         return r;
     }
-    
+
     fn permuteValues(dst: []Value, src: []const Value, seq: u32) bool {
         assert(src.len == dst.len);
         const alen = @intCast(u32, src.len);
-        
+
         var fact = factorial(alen);
 
         // Out of range?
@@ -916,7 +915,7 @@ const Test = struct {
         while (i < (alen - 1)) : (i += 1) {
             const tmpi = (seq / fact) % (alen - i);
             const tmp = dst[i+tmpi];
-           
+
             var j: u32 = i + tmpi;
             while (j > i) : (j -= 1) {
                 dst[j] = dst[j-1];

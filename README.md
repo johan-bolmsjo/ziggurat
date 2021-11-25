@@ -7,9 +7,9 @@ BEWARE: This is a learning experience!
 I have just started this journey. Unless I tire of the language I will port my
 favorite data structures and add them to this repo.
 
-Compiles with: zig 0.5.0+dc44fe053
+Compiles with: zig 0.8.1
 
-## Test
+## Running Tests
 
     zig test list.zig
-    zig --release-safe test avl_tree.zig
+    zig test -O ReleaseSafe avl_tree.zig

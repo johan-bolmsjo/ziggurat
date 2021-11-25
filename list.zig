@@ -16,7 +16,7 @@ const Allocator = std.mem.Allocator;
 pub fn NodeType(comptime D: type) type {
     return struct {
         const Self = @This();
-        
+
         next_: *Self,
         prev_: *Self,
         datum:  D,
@@ -104,7 +104,7 @@ test "linkNext" {
         Test.VNode{.next = &n[1], .prev = &n[4]},
         Test.VNode{.next = &n[0], .prev = &n[2]},
     };
-    
+
     Test.checkLinks(h1, expectedLinks[0..]);
 }
 
@@ -130,7 +130,7 @@ test "linkPrev" {
         Test.VNode{.next = &n[4], .prev = &n[2]},
         Test.VNode{.next = &n[0], .prev = &n[3]},
     };
-    
+
     Test.checkLinks(h1, expectedLinks[0..]);
 }
 
@@ -178,11 +178,11 @@ test "isLinked" {
     const n0 = try Test.Node.new(allocator, 0);
     const n1 = try Test.Node.new(allocator, 1);
 
-    Test.expectEqual(false, n0.isLinked());
-    
+    try Test.expectEqual(false, n0.isLinked());
+
     n0.linkPrev(n1);
-    Test.expectEqual(true, n0.isLinked());
-    Test.expectEqual(true, n1.isLinked());
+    try Test.expectEqual(true, n0.isLinked());
+    try Test.expectEqual(true, n1.isLinked());
 }
 
 test "iterate" {
@@ -200,12 +200,12 @@ test "iterate" {
         sum += it.datum;
     }
 
-    Test.expectEqual(@as(u32, 1+2+3+4), sum);
+    try Test.expectEqual(@as(u32, 1+2+3+4), sum);
 }
 
 const Test = struct {
     const expectEqual = std.testing.expectEqual;
-    
+
     const Node = NodeType(u32);
 
     const VNode = struct {

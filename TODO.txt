@@ -1,0 +1,12 @@
+# -*- mode: org -*-
+#+title: Ziggurat TODO List
+
+* Testing
+** Remove use of std.debug.panic in tests
+
+Use std.testing.expectEqual or similar construct. Tests return errors in Zig
+0.8.x so all test results should be reported that way to present a backtrace on
+failures.
+
+* AVL Tree
+** Add iterator support
