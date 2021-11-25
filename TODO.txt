@@ -8,5 +8,14 @@ Use std.testing.expectEqual or similar construct. Tests return errors in Zig
 0.8.x so all test results should be reported that way to present a backtrace on
 failures.
 
-* AVL Tree
-** Add iterator support
+* Features
+** AVL Tree
+*** Add iterator support
+
+* Bugs
+** AVL Tree
+*** The clear function leaves the tree in a semi destructed state when an error is returned
+
+Commit 8ccf662 made it possible for clear to report an error to support
+propagating a testing error reported by the relase function. However this would
+leave the tree in a semi destructed state.
