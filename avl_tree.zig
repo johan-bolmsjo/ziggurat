@@ -53,11 +53,10 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
         root: ?*Node = null,
         len: usize = 0,
 
-        /// Insert node into tree.
-        /// Returns the inserted node or one already in the tree with an identical key.
-        /// The inserter must check the return value to determine if the node was inserted or a
+        /// Add node into tree. Returns the added node or one already in the tree with an identical
+        /// key. The caller must check the return value to determine if the node was added or a
         /// duplicate was found.
-        pub fn insert(self: *Self, node: *Node) *Node {
+        pub fn add(self: *Self, node: *Node) *Node {
             // Empty tree case.
             if (self.root == null) {
                 self.root = node;
@@ -110,7 +109,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
             // Rebalance if necessary
             if (abs(s.balance) > 1) {
                 dir = directionOfBool(cmpKey(getKey(s), key) == .lt);
-                s = s.insertBalance(dir);
+                s = s.adjustBalanceAdd(dir);
             }
 
             // Fix parent
@@ -213,7 +212,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
                 if (absBalance == 1) {
                     break;
                 } else if (absBalance > 1) {
-                    up[i] = up[i].removeBalance(upd[i], &done);
+                    up[i] = up[i].adjustBalanceRemove(upd[i], &done);
 
                     // Fix parent
                     if (i > 0) {
@@ -311,13 +310,13 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
             return if (curr != null) curr else greater;
         }
 
-        /// Returns the leftmost node in the tree.
-        pub fn leftmost(self: *Self) ?*Node {
+        /// Returns the node with the lowest key in the tree.
+        pub fn findLowest(self: *Self) ?*Node {
             return self.edgeNode(Left);
         }
 
-        /// Returns the rightmost node in the tree.
-        pub fn rightmost(self: *Self) ?*Node {
+        /// Returns the node with the highest key in the tree.
+        pub fn findHighest(self: *Self) ?*Node {
             return self.edgeNode(Right);
         }
 
@@ -456,8 +455,7 @@ pub fn NodeType(comptime D: type) type {
             n2.balance = 0;
         }
 
-        // Rebalance after insertion.
-        fn insertBalance(self: *Self, dir: Direction) *Self {
+        fn adjustBalanceAdd(self: *Self, dir: Direction) *Self {
             const n = self.links[dir].?;
             const bal = balanceOfDirection(dir);
 
@@ -474,8 +472,7 @@ pub fn NodeType(comptime D: type) type {
             };
         }
 
-        // Rebalance after deletion.
-        fn removeBalance(self: *Self, dir: Direction, done: *bool) *Self {
+        fn adjustBalanceRemove(self: *Self, dir: Direction, done: *bool) *Self {
             const n = self.links[otherDirection(dir)].?;
             const bal = balanceOfDirection(dir);
 
@@ -541,7 +538,7 @@ inline fn abs(x: anytype) @TypeOf(x) {
 
 const runCpuIntensiveTests = true;
 
-test "invariants: permute insert" {
+test "invariants: permute add" {
     if (!runCpuIntensiveTests) return;
 
     const N = 10;
@@ -556,15 +553,15 @@ test "invariants: permute insert" {
         Test.initNodes(&nodes, &dst);
 
         for (nodes) |*node, i| {
-            const rnode = tree.insert(node);
+            const rnode = tree.add(node);
             if (rnode != node) {
-                std.debug.panic("Failed to insert datum={}, index={}, insertSequence={}, returnedDatum={}",
+                std.debug.panic("Failed to add datum={}, index={}, sequence={}, returnedDatum={}",
                                 .{node.datum, i, seq, rnode.datum});
             }
 
             const validation = tree.validate();
             if (!validation.balanced or !validation.sorted) {
-                std.debug.panic("Invalid tree invariant: balanced={}, sorted={}, insertSequence={}",
+                std.debug.panic("Invalid tree invariant: balanced={}, sorted={}, sequence={}",
                                 .{validation.balanced, validation.sorted, seq});
             }
         }
@@ -589,9 +586,9 @@ test "invariants: permute remove" {
         Test.initNodes(&nodes, &dst);
 
         for (nodes) |*node, i| {
-            const rnode = tree.insert(node);
+            const rnode = tree.add(node);
             if (rnode != node) {
-                std.debug.panic("Failed to insert datum={}, index={}, insertSequence={}, returnedDatum={}",
+                std.debug.panic("Failed to add datum={}, index={}, sequence={}, returnedDatum={}",
                                 .{node.datum, i, seq, rnode.datum});
             }
         }
@@ -600,17 +597,17 @@ test "invariants: permute remove" {
             const rnode = tree.remove(value);
             if (rnode) |node| {
                 if (node.datum != value) {
-                    std.debug.panic("Failed to remove datum={}, index={}, removeSequence={}, returnedDatum={}",
+                    std.debug.panic("Failed to remove datum={}, index={}, sequence={}, returnedDatum={}",
                                     .{value, i, seq, node.datum});
                 }
             } else {
-                std.debug.panic("Failed to remove datum={}, index={}, removeSequence={}, returnedNode={}",
+                std.debug.panic("Failed to remove datum={}, index={}, sequence={}, returnedNode={}",
                                 .{value, i, seq, rnode});
             }
 
             const validation = tree.validate();
             if (!validation.balanced or !validation.sorted) {
-                std.debug.panic("Invalid tree invariant: balanced={}, sorted={}, insertSequence={}",
+                std.debug.panic("Invalid tree invariant: balanced={}, sorted={}, sequence={}",
                                 .{validation.balanced, validation.sorted, seq});
             }
         }
@@ -620,19 +617,15 @@ test "invariants: permute remove" {
     }
 }
 
-test "insert existing" {
+test "add existing" {
     var tree = Test.Tree{};
 
     var a = Test.Tree.Node{.datum = 1};
     var b = Test.Tree.Node{.datum = 1};
 
-    try Test.expectEqual(&a, tree.insert(&a));
-    try Test.expectEqual(&a, tree.insert(&b));
+    try Test.expectEqual(&a, tree.add(&a));
+    try Test.expectEqual(&a, tree.add(&b));
 }
-
-// TODO: test "iter update"
-// TODO: test "iter empty"
-// TODO: test "iter cancel"
 
 test "remove from empty tree" {
     var tree = Test.Tree{};
@@ -739,27 +732,26 @@ test "len" {
     var tree = Test.Tree{};
     try Test.expectEqual(@as(usize, 0), tree.len);
 
-    var insertCount: usize = 0;
+    var addCount: usize = 0;
     for (nodes) |*node| {
-        const rnode = tree.insert(node);
+        const rnode = tree.add(node);
         if (rnode != node) {
             std.debug.panic("Failed to populate tree with datum {}, found existing datum {}",
                             .{node.datum, rnode.datum});
         }
-
-        insertCount += 1;
-        try Test.expectEqual(insertCount, tree.len);
+        addCount += 1;
+        try Test.expectEqual(addCount, tree.len);
     }
 
     // Removing non existing value should not modify tree count.
     _ = tree.remove(nonExistingValue);
-    try Test.expectEqual(insertCount, tree.len);
+    try Test.expectEqual(addCount, tree.len);
 
     var removeCount: usize = 0;
     for (testValues) |v| {
         _ = tree.remove(v);
         removeCount += 1;
-        try Test.expectEqual(insertCount - removeCount, tree.len);
+        try Test.expectEqual(addCount - removeCount, tree.len);
     }
 }
 
@@ -823,30 +815,30 @@ test "find" {
     }
 }
 
-test "leftmost" {
+test "findLowest" {
     var tree = Test.Tree{};
     const expected: ?*Test.Tree.Node = null;
-    try Test.expectEqual(expected, tree.leftmost());
+    try Test.expectEqual(expected, tree.findLowest());
 
     const testValues = [_]Test.Value{42, 3, 99, 76};
     var nodes: [testValues.len]Test.Tree.Node = undefined;
     Test.initNodes(&nodes, &testValues);
     Test.populateTree(&tree, &nodes);
 
-    try Test.expectEqual(@as(Test.Value, 3), tree.leftmost().?.datum);
+    try Test.expectEqual(@as(Test.Value, 3), tree.findLowest().?.datum);
 }
 
-test "rightmost" {
+test "findHighest" {
     var tree = Test.Tree{};
     const expected: ?*Test.Tree.Node = null;
-    try Test.expectEqual(expected, tree.rightmost());
+    try Test.expectEqual(expected, tree.findHighest());
 
     const testValues = [_]Test.Value{42, 3, 99, 76};
     var nodes: [testValues.len]Test.Tree.Node = undefined;
     Test.initNodes(&nodes, &testValues);
     Test.populateTree(&tree, &nodes);
 
-    try Test.expectEqual(@as(Test.Value, 99), tree.rightmost().?.datum);
+    try Test.expectEqual(@as(Test.Value, 99), tree.findHighest().?.datum);
 }
 
 const Test = struct {
@@ -886,7 +878,7 @@ const Test = struct {
 
     fn populateTree(tree: *Tree, nodes: []Node) void {
         for (nodes) |*node| {
-            const rnode = tree.insert(node);
+            const rnode = tree.add(node);
             if (rnode != node) {
                 std.debug.panic("Failed to populate tree with datum {}, found existing datum {}",
                                 .{node.datum, rnode.datum});
