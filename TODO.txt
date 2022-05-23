@@ -1,21 +1,31 @@
 # -*- mode: org -*-
 #+title: Ziggurat TODO List
 
-* Testing
-** Remove use of std.debug.panic in tests
-
+* TODO Remove use of std.debug.panic in tests
 Use std.testing.expectEqual or similar construct. Tests return errors in Zig
 0.8.x so all test results should be reported that way to present a backtrace on
 failures.
 
-* Features
-** AVL Tree
-*** Add iterator support
-
-* Bugs
-** AVL Tree
-*** The clear function leaves the tree in a semi destructed state when an error is returned
-
+* avl_tree.zig
+*** TODO Add iterator support
+*** DONE The clear function leaves the tree in a semi destructed state when an error is returned
+CLOSED: [2022-05-23 Mon 15:06]
+:LOGBOOK:
+- CLOSING NOTE [2022-05-23 Mon 15:06] \\
+  Reverted API changes introduced by 8ccf662.
+  
+  There is a remaining issue with testing in general since Zig changed the test
+  strategy to have tests return errors instead of panicking.
+  
+  For example the clear function of the AVL tree may not fail. Doing so would
+  leave the tree in an inconsistent state. A test on the other hand may want to
+  test that for example the clear callback is invoked the expected number of
+  times. With the strategy of returning errors from the test functions, this
+  require modifying the real code in ways that are not always suitable.
+  
+  For the time being I have opted to keep the panics in the test code even though
+  it results in very obtuse failure messages. This needs more pondering.
+:END:
 Commit 8ccf662 made it possible for clear to report an error to support
 propagating a testing error reported by the relase function. However this would
 leave the tree in a semi destructed state.

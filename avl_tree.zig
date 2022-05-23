@@ -232,7 +232,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
         /// Remove all nodes from the tree.
         /// The release function with supplied context is called on each removed node.
         /// Use {} as context if no release function is supplied.
-        pub fn clear(self: *Self, context: anytype, releaseFn: ?fn(@TypeOf(context), *Node) anyerror!void) anyerror!void {
+        pub fn clear(self: *Self, context: anytype, releaseFn: ?fn(@TypeOf(context), *Node) void) void {
             var curr = self.root;
 
             // Destruction by rotation
@@ -247,7 +247,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
                         // Remove node
                         const right = xcurr.links[Right];
                         if (releaseFn) |f| {
-                            try f(context, xcurr);
+                            f(context, xcurr);
                         }
                         break :blk right;
                     }
@@ -333,21 +333,20 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
             return node;
         }
 
-        /// Apply calls the given function on all data stored in the tree left to right.
-        /// Stops iterations if applyFn returns an error and reports it.
-        pub fn apply(self: *Self, context: anytype, applyFn: fn(@TypeOf(context), *Node) anyerror!void) anyerror!void {
+        /// Apply calls the given apply function on all data stored in the tree left to right.
+        pub fn apply(self: *Self, context: anytype, applyFn: fn(@TypeOf(context), *Node) void) void {
             if (self.root) |root| {
-                try applyNode(root, context, applyFn);
+                applyNode(root, context, applyFn);
             }
         }
 
-        fn applyNode(node: *Node, context: anytype, applyFn: fn(@TypeOf(context), *Node) anyerror!void) anyerror!void {
+        fn applyNode(node: *Node, context: anytype, applyFn: fn(@TypeOf(context), *Node) void) void {
             if (node.links[Left]) |left| {
-                try applyNode(left, context, applyFn);
+                applyNode(left, context, applyFn);
             }
-            try applyFn(context, node);
+            applyFn(context, node);
             if (node.links[Right]) |right| {
-                try applyNode(right, context, applyFn);
+                applyNode(right, context, applyFn);
             }
         }
 
@@ -570,7 +569,7 @@ test "invariants: permute insert" {
             }
         }
 
-        try tree.clear({}, null);
+        tree.clear({}, null);
         seq += 1;
     }
 }
@@ -616,7 +615,7 @@ test "invariants: permute remove" {
             }
         }
 
-        try tree.clear({}, null);
+        tree.clear({}, null);
         seq += 1;
     }
 }
@@ -667,14 +666,17 @@ test "clear" {
         testValues: []const Test.Value,
         index: usize = 0,
 
-        fn f(self: *@This(), node: *Test.Tree.Node) !void {
-            try Test.expectEqual(self.testValues[self.index], node.datum);
+        fn f(self: *@This(), node: *Test.Tree.Node) void {
+            if (node.datum != self.testValues[self.index]) {
+                std.debug.panic("Unexpected tree sequence! got node {}; want {}",
+                                .{node.datum, self.testValues[self.index]});
+            }
             self.index += 1;
         }
     };
 
     var ctx = ReleaseContext{.testValues = &testValues};
-    try tree.clear(&ctx, ReleaseContext.f);
+    tree.clear(&ctx, ReleaseContext.f);
 
     try Test.expectEqual(@as(?*Test.Tree.Node, null), tree.root);
     try Test.expectEqual(@as(usize, 0), tree.len);
@@ -685,11 +687,11 @@ test "clear" {
 test "clearEmpty" {
     var tree = Test.Tree{};
     const ReleaseContext = struct {
-        fn f(self: void, node: *Test.Tree.Node) !void {
-            return error.TestUnexpectedCallback;
+        fn f(_: void, _: *Test.Tree.Node) void {
+            std.debug.panic("Unexpected callback!", .{});
         }
     };
-    try tree.clear({}, ReleaseContext.f);
+    tree.clear({}, ReleaseContext.f);
 }
 
 test "apply" {
@@ -704,24 +706,27 @@ test "apply" {
         testValues: []const Test.Value,
         index: usize = 0,
 
-        fn f(self: *@This(), node: *Test.Tree.Node) !void {
-            try Test.expectEqual(self.testValues[self.index], node.datum);
+        fn f(self: *@This(), node: *Test.Tree.Node) void {
+            if (node.datum != self.testValues[self.index]) {
+                std.debug.panic("Unexpected tree sequence! got node {}; want {}",
+                                .{node.datum, self.testValues[self.index]});
+            }
             self.index += 1;
         }
     };
 
     var ctx = ApplyContext{.testValues = &testValues};
-    try tree.apply(&ctx, ApplyContext.f);
+    tree.apply(&ctx, ApplyContext.f);
 }
 
 test "applyEmpty" {
     var tree = Test.Tree{};
     const ApplyContext = struct {
-        fn f(self: void, node: *Test.Tree.Node) !void {
-            return error.TestUnexpectedCallback;
+        fn f(_: void, _: *Test.Tree.Node) void {
+            std.debug.panic("Unexpected callback!", .{});
         }
     };
-    try tree.apply({}, ApplyContext.f);
+    tree.apply({}, ApplyContext.f);
 }
 
 test "len" {

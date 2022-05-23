@@ -173,7 +173,7 @@ test "unlink" {
 
 test "isLinked" {
     var buffer: [100]u8 = undefined;
-    const allocator = &std.heap.FixedBufferAllocator.init(&buffer).allocator;
+    var allocator = &std.heap.FixedBufferAllocator.init(&buffer).allocator();
 
     const n0 = try Test.Node.new(allocator, 0);
     const n1 = try Test.Node.new(allocator, 1);
