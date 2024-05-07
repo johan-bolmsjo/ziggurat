@@ -104,7 +104,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
                 p.balance += balanceOfDirection(dir);
             }
 
-            var q = s; // Save rebalance point for parent fix
+            const q = s; // Save rebalance point for parent fix
 
             // Rebalance if necessary
             if (abs(s.balance) > 1) {
@@ -385,7 +385,7 @@ pub fn TreeType(comptime D: type, comptime K: type, getKey: fn(*NodeType(D)) K, 
                 balanced.* = false;
             }
 
-            return max(depthLeft, depthRight);
+            return @max(depthLeft, depthRight);
         }
     };
 }
@@ -529,8 +529,6 @@ inline fn directionOfBool(b: bool) Direction {
     return if (b) Right else Left;
 }
 
-const max = std.math.max;
-
 // We can do without the error checks of std.math.absInt
 inline fn abs(x: anytype) @TypeOf(x) {
     return if (x < 0) -x else x;
@@ -552,7 +550,7 @@ test "invariants: permute add" {
     while (Test.permuteValues(&dst, &src, seq)) {
         Test.initNodes(&nodes, &dst);
 
-        for (nodes) |*node, i| {
+        for (&nodes, 0..) |*node, i| {
             const rnode = tree.add(node);
             if (rnode != node) {
                 std.debug.panic("Failed to add datum={}, index={}, sequence={}, returnedDatum={}",
@@ -585,7 +583,7 @@ test "invariants: permute remove" {
     while (Test.permuteValues(&dst, &src, seq)) {
         Test.initNodes(&nodes, &dst);
 
-        for (nodes) |*node, i| {
+        for (&nodes, 0..) |*node, i| {
             const rnode = tree.add(node);
             if (rnode != node) {
                 std.debug.panic("Failed to add datum={}, index={}, sequence={}, returnedDatum={}",
@@ -593,7 +591,7 @@ test "invariants: permute remove" {
             }
         }
 
-        for (dst) |value, i| {
+        for (dst, 0..) |value, i| {
             const rnode = tree.remove(value);
             if (rnode) |node| {
                 if (node.datum != value) {
@@ -601,7 +599,7 @@ test "invariants: permute remove" {
                                     .{value, i, seq, node.datum});
                 }
             } else {
-                std.debug.panic("Failed to remove datum={}, index={}, sequence={}, returnedNode={}",
+                std.debug.panic("Failed to remove datum={}, index={}, sequence={}, returnedNode={?}",
                                 .{value, i, seq, rnode});
             }
 
@@ -629,7 +627,7 @@ test "add existing" {
 
 test "remove from empty tree" {
     var tree = Test.Tree{};
-    var node = tree.remove(1);
+    const node = tree.remove(1);
     try Test.expectEqual(@as(?*Test.Tree.Node, null), node);
 }
 
@@ -641,7 +639,7 @@ test "remove non existing" {
     var tree = Test.Tree{};
     Test.populateTree(&tree, &nodes);
 
-    var node = tree.remove(4);
+    const node = tree.remove(4);
     try Test.expectEqual(@as(?*Test.Tree.Node, null), node);
 }
 
@@ -733,7 +731,7 @@ test "len" {
     try Test.expectEqual(@as(usize, 0), tree.len);
 
     var addCount: usize = 0;
-    for (nodes) |*node| {
+    for (&nodes) |*node| {
         const rnode = tree.add(node);
         if (rnode != node) {
             std.debug.panic("Failed to populate tree with datum {}, found existing datum {}",
@@ -765,7 +763,7 @@ test "find" {
 
     const T = struct {
         name:     []const u8,
-        lookupFn: fn(*Test.Tree, u32) ?u32,
+        lookupFn: *const fn(*Test.Tree, u32) ?u32,
         input:    u32,
         output:   ?u32,
     };
@@ -806,11 +804,11 @@ test "find" {
         T{.name = "FindGe(Existing)",    .lookupFn = F.findGe, .input = 10, .output = 10},
     };
 
-    for (testData) |*t| {
+    for (&testData) |*t| {
         const output = t.lookupFn(&tree, t.input);
         const noneMarker = 99;
         if ((output orelse noneMarker) != (t.output orelse noneMarker)) {
-            std.debug.panic("{s}: input={}, output={}; expect={}", .{t.name, t.input, output, t.output});
+            std.debug.panic("{s}: input={}, output={?}; expect={?}", .{t.name, t.input, output, t.output});
         }
     }
 }
@@ -864,14 +862,14 @@ const Test = struct {
 
     fn valuesInSequence(comptime n: usize) [n]Value {
         var t: [n]Value = undefined;
-        for (t) |_, i| {
-            t[i] = @intCast(Value, i);
+        for (t, 0..) |_, i| {
+            t[i] = @intCast(i);
         }
         return t;
     }
 
     fn initNodes(nodes: []Node, values: []const Value) void {
-        for (values) |value, i| {
+        for (values, 0..) |value, i| {
             nodes[i] = Tree.Node{.datum = value};
         }
     }
@@ -897,7 +895,7 @@ const Test = struct {
 
     fn permuteValues(dst: []Value, src: []const Value, seq: u32) bool {
         assert(src.len == dst.len);
-        const alen = @intCast(u32, src.len);
+        const alen: u32 = @intCast(src.len);
 
         var fact = factorial(alen);
 
@@ -906,7 +904,7 @@ const Test = struct {
             return false;
         }
 
-        mem.copy(u32, dst[0..], src[0..]);
+        mem.copyForwards(u32, dst[0..], src[0..]);
 
         var i: u32 = 0;
         while (i < (alen - 1)) : (i += 1) {

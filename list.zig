@@ -30,8 +30,8 @@ pub fn NodeType(comptime D: type) type {
         }
 
         /// Allocate node using the supplied allocator and initialize it the same way init does.
-        pub fn new(allocator: *Allocator, datum: D) !*Self {
-            var node = try allocator.create(Self);
+        pub fn new(allocator: *const Allocator, datum: D) !*Self {
+            const node = try allocator.create(Self);
             init(node, datum);
             return node;
         }
@@ -173,10 +173,11 @@ test "unlink" {
 
 test "isLinked" {
     var buffer: [100]u8 = undefined;
-    var allocator = &std.heap.FixedBufferAllocator.init(&buffer).allocator();
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    const allocator = fba.allocator();
 
-    const n0 = try Test.Node.new(allocator, 0);
-    const n1 = try Test.Node.new(allocator, 1);
+    const n0 = try Test.Node.new(&allocator, 0);
+    const n1 = try Test.Node.new(&allocator, 1);
 
     try Test.expectEqual(false, n0.isLinked());
 
@@ -214,14 +215,14 @@ const Test = struct {
     };
 
     fn initNodes(nodes: []Test.Node) void {
-        for (nodes) |*node, i| {
-            node.init(@intCast(u32, i));
+        for (nodes, 0..) |*node, i| {
+            node.init(@intCast(i));
         }
     }
 
     fn checkLinks(firstNode: *Node, expectedLinks: []const VNode) void {
         var n = firstNode;
-        for (expectedLinks) |v, i| {
+        for (expectedLinks, 0..) |v, i| {
             if (n.next() != v.next) {
                 std.debug.panic("expected next node of {} (index {}) to be {}; got {}",
                                 .{n.datum, i, v.next.datum, n.next().datum});
